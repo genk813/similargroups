@@ -5,7 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from collections import defaultdict
 
-app = Flask(__name__)  # シンプルにテンプレートフォルダの指定を元に戻す
+app = Flask(__name__)
 CORS(app)
 
 # SQLiteデータベースの設定
