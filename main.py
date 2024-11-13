@@ -40,8 +40,8 @@ def search_classification():
 
     classifications = defaultdict(set)
     remark_classifications = defaultdict(set)
-    related_codes_dict = defaultdict(list)  # 35K関連のコードを保持するための辞書
-
+    related_code_details = defaultdict(list)
+    
     for cleaned_code in cleaned_codes:
         # 正しい形式（2桁数字 + アルファベット文字 + 2桁数字）であるか確認
         match = re.fullmatch(r'\d{2}[A-Z]\d{2}', cleaned_code)
@@ -53,27 +53,31 @@ def search_classification():
         if similar_groups:
             for group in similar_groups:
                 if group.general_similar:
-                    if group.classification == "第35類（小売）" and group.related_codes:
-                        # 関連コードがある場合、それらも一緒に保持
-                        related_codes_dict[group.group_code].extend(group.related_codes.split())
                     classifications[group.classification].add(cleaned_code)
                 if group.remark_similar:
                     remark_classifications[group.classification].add(cleaned_code)
+
+                # もしrelated_codesがある場合、その中で入力されたコードと一致するものを記録
+                if group.related_codes:
+                    related_codes_list = group.related_codes.split()
+                    matched_related_codes = [code for code in related_codes_list if code in cleaned_codes]
+                    if matched_related_codes:
+                        related_code_details[group.group_code].extend(matched_related_codes)
         else:
             print(f"No matching group found for: {cleaned_code}")  # デバッグ用
 
-    if classifications or remark_classifications:
+    if classifications or remark_classifications or related_code_details:
         result = []
         for classification, codes in classifications.items():
-            group_code_list = []
+            formatted_codes = []
             for code in codes:
-                # 関連コードがある場合には括弧内に追加する
-                if code in related_codes_dict:
-                    related = " ".join(related_codes_dict[code])
-                    group_code_list.append(f"{code} ({related})")
+                if code in related_code_details:
+                    related = ' '.join(related_code_details[code])
+                    formatted_codes.append(f"{code} ({related})")
                 else:
-                    group_code_list.append(code)
-            result.append({"classification": classification, "group_codes": group_code_list})
+                    formatted_codes.append(code)
+            result.append({"classification": classification, "group_codes": formatted_codes})
+
         sorted_result = sorted(result, key=lambda x: int(re.search(r'\d+', x["classification"]).group()) if re.search(r'\d+', x["classification"]) else x["classification"])
 
         remark_result = []
