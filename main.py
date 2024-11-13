@@ -20,6 +20,7 @@ class SimilarGroup(db.Model):
     classification = db.Column(db.String(120), nullable=False)
     general_similar = db.Column(db.Boolean, nullable=False)
     remark_similar = db.Column(db.Boolean, nullable=False)
+    related_codes = db.Column(db.String(500), nullable=True)  # 追加: related_codes列を定義
 
     # 複合ユニーク制約を設定
     __table_args__ = (db.UniqueConstraint('group_code', 'classification', name='unique_group_classification'),)
@@ -39,6 +40,8 @@ def search_classification():
 
     classifications = defaultdict(set)
     remark_classifications = defaultdict(set)
+    related_codes_dict = defaultdict(list)  # 35K関連のコードを保持するための辞書
+
     for cleaned_code in cleaned_codes:
         # 正しい形式（2桁数字 + アルファベット文字 + 2桁数字）であるか確認
         match = re.fullmatch(r'\d{2}[A-Z]\d{2}', cleaned_code)
@@ -50,6 +53,9 @@ def search_classification():
         if similar_groups:
             for group in similar_groups:
                 if group.general_similar:
+                    if group.classification == "第35類（小売）" and group.related_codes:
+                        # 関連コードがある場合、それらも一緒に保持
+                        related_codes_dict[group.group_code].extend(group.related_codes.split())
                     classifications[group.classification].add(cleaned_code)
                 if group.remark_similar:
                     remark_classifications[group.classification].add(cleaned_code)
@@ -59,7 +65,15 @@ def search_classification():
     if classifications or remark_classifications:
         result = []
         for classification, codes in classifications.items():
-            result.append({"classification": classification, "group_codes": list(codes)})
+            group_code_list = []
+            for code in codes:
+                # 関連コードがある場合には括弧内に追加する
+                if code in related_codes_dict:
+                    related = " ".join(related_codes_dict[code])
+                    group_code_list.append(f"{code} ({related})")
+                else:
+                    group_code_list.append(code)
+            result.append({"classification": classification, "group_codes": group_code_list})
         sorted_result = sorted(result, key=lambda x: int(re.search(r'\d+', x["classification"]).group()) if re.search(r'\d+', x["classification"]) else x["classification"])
 
         remark_result = []
@@ -89,11 +103,13 @@ if __name__ == '__main__':
                 ).first()
 
                 if not existing_group:
+                    related_codes = row.get('related_codes')
                     new_group = SimilarGroup(
                         group_code=row['group_code'].strip(),
                         classification=row['classification'],
                         general_similar=(row['general_similar'].strip().lower() == 'yes'),
-                        remark_similar=(row['remark_similar'].strip().lower() == 'yes')
+                        remark_similar=(row['remark_similar'].strip().lower() == 'yes'),
+                        related_codes=related_codes.strip() if related_codes and related_codes.strip() else None  # related_codes列を追加
                     )
                     db.session.add(new_group)
 
